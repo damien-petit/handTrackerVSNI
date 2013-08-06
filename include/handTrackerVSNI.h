@@ -1,5 +1,5 @@
-#ifndef SKELETON_TRACKER_VSNI
-#define SKELETON_TRACKER_VSNI
+#ifndef HAND_TRACKER_VSNI
+#define HAND_TRACKER_VSNI
 
 #include <configparser/configparser.h>
 #include <vision/vision.h>
@@ -25,6 +25,8 @@
 #include <XnPropNames.h>
 
 #include <opencv2/opencv.hpp>
+
+#include "NiTrailHistory.h"
 
 namespace handTrackerVSNI
 {
@@ -112,7 +114,9 @@ namespace handTrackerVSNI
 
             XnCallbackHandle hHandCallbacks_;
             xn::HandsGenerator handsGen_;
-            xn::GestureGenerator gestureGenerator_;
+            xn::GestureGenerator gestureGen_;
+
+            TrailHistory handsHistory_;
 // end used by the openni hand tracker function
 
             

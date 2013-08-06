@@ -53,6 +53,8 @@ time_diff(tv_in, tv_out, tv_diff);\
 std::cout << "Call " << #x << " took: " << (tv_diff.tv_sec + ((float)tv_diff.tv_usec/1000000)) << "s" << std::endl;\
 }
 
+typedef TrailHistory::Trail Trail;
+
 namespace handTrackerVSNI
 {
 //used to access the member of the class handTrackerVSNI inside the static callback function of OpenNI
@@ -62,7 +64,8 @@ namespace handTrackerVSNI
     : Plugin( vs, "handTrackerVSNI", sandbox ), WithViewer(vs),
     XmlRpcServerMethod("GetObjectPosition", 0),
     imgXi_(0), imgXd_(0),imgDispXi_(0), imgDispXd_(0),
-    sandbox_(sandbox)
+    sandbox_(sandbox),
+    handsHistory_(10)
     {
         me_ = this;
 
@@ -246,6 +249,20 @@ namespace handTrackerVSNI
     {
         XnStatus nRetVal = XN_STATUS_OK;
 
+//Create generators
+        gestureGen_.Create(*context_);
+
+        nRetVal = gestureGen_.Create(*context_);
+
+        if(nRetVal != XN_STATUS_OK)
+        {
+             printf("Failed to create the gesture generator \n");
+        }
+        else
+        {
+             printf("Succeed to create the gesture generator \n");
+        }
+
         handsGen_.Create(*context_);
 
         nRetVal = handsGen_.Create(*context_);
@@ -258,8 +275,18 @@ namespace handTrackerVSNI
         {
              printf("Succeed to create the hands generator \n");
         }
+//Register callbacks
+        nRetVal = gestureGen_.RegisterGestureCallbacks(Gesture_Recognized, Gesture_Process, me_, hHandCallbacks_);
+        if (nRetVal != XN_STATUS_OK)
+        {
+            printf("Unable to register gesture callbacks.");
+        }
+        else
+        {
+            printf("gesture callbacks registered. \n");
+        }
 
-        nRetVal = handsGen_.RegisterHandCallbacks(Hand_Create, Hand_Update, Hand_Destroy, NULL, hHandCallbacks_);
+        nRetVal = handsGen_.RegisterHandCallbacks(Hand_Create, Hand_Update, Hand_Destroy, me_, hHandCallbacks_);
 
         if(nRetVal != XN_STATUS_OK)
         {
@@ -287,6 +314,34 @@ namespace handTrackerVSNI
         {
             std::cout<<"handsGenerator succeed to start"<<std::endl;
         }
+
+        gestureGen_.StartGenerating();
+
+        checkGenerate = gestureGen_.IsGenerating();
+        if(!checkGenerate)
+        {
+            std::cout<<"gestureGenerator failed to start"<<std::endl;
+        }
+        else
+        {
+            std::cout<<"gestureGenerator succeed to start"<<std::endl;
+        }
+
+//    ADD_ALL_GESTURES;
+//
+//    printf("[HandTracker::Run()] after ADD_ALL_GESTURES \n");
+
+//the different gestures that we can had are the folowing
+//Click
+//Wave
+        if(me_->gestureGen_.AddGesture("Click", NULL) != XN_STATUS_OK)
+        {
+            printf("Unable to add gesture"); 
+        }
+        else
+        {
+            printf("able to add gesture \n");
+        }
     }
 
     void HandTrackerVSNI::stopHandsGen()
@@ -299,26 +354,45 @@ namespace handTrackerVSNI
                                                             const XnPoint3D*        pEndPosition,
                                                             void*                   pCookie)
     {
-//        printf("Gesture recognized: %s\n", strGesture);
-//    
-//        HandTracker*    pThis = static_cast<HandTracker*>(pCookie);
-////        if(sm_Instances.Find(pThis) == sm_Instances.end())
-////        {
-////            printf("Dead HandTracker: skipped!\n");
-////            return;
-////        }
-//    
+        printf("Gesture recognized: %s\n", strGesture);
+    
+//        xn::HandTracker*    pThis = static_cast<xn::HandTracker*>(pCookie);
+//        if(sm_Instances.Find(pThis) == sm_Instances.end())
+//        {
+//            printf("Dead HandTracker: skipped!\n");
+//            return;
+//        }
+    
 //        pThis->m_HandsGenerator.StartTracking(*pEndPosition);
+//HACK me_ is used as pThis 
+        me_->handsGen_.StartTracking(*pEndPosition);
     }
 
     void HandTrackerVSNI::Hand_Create(xn::HandsGenerator& generator, XnUserID nId, const XnPoint3D* pPosition, XnFloat fTime, void* pCookie)
     {
         printf("New Hand: %d @ (%f,%f,%f)\n", nId, pPosition->X, pPosition->Y, pPosition->Z);
+
+        // Add to hands history if this user is not already tracked
+        if(!me_->handsHistory_.Find(nId))
+        {
+            me_->handsHistory_.Add(nId).Push(*pPosition);
+        }
+
     }
 
     void HandTrackerVSNI::Hand_Update( xn::HandsGenerator& generator, XnUserID nId, const XnPoint3D* pPosition, XnFloat fTime, void* pCookie)
     {
         printf("Hand Moving: %d @ (%f,%f,%f)\n", nId, pPosition->X, pPosition->Y, pPosition->Z);
+
+        // Add to this user's hands history
+        Trail*  const trail = me_->handsHistory_.Find(nId);
+        if(!trail)
+        {
+            printf("Dead hand update: skipped!\n");
+            return;
+        }
+        trail->Push(*pPosition);
+
     }
 
     void HandTrackerVSNI::Hand_Destroy(xn::HandsGenerator& generator, XnUserID nId, XnFloat fTime, void* pCookie)

@@ -111,10 +111,12 @@ link_directories(
 
 SET( handTrackerVSNI_lib_src 
     src/handTrackerVSNI.cpp
+    src/NiTrailHistory.cpp
     )
 
 SET( handTrackerVSNI_lib_hdr
     include/handTrackerVSNI.h
+    include/NiTrailHistory.h
     )
 
 #add library with option SHARED means compile the library dynamically
